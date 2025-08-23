@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>실시간 WebRTC 비디오 스트리밍</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <h1>🎥 실시간 비디오 스트리밍</h1>
+
+  <div class="video-container">
+    <video id="localVideo" autoplay playsinline muted></video>
+    <div class="video-overlay">
+      <div class="status-indicator" id="streamStatus">대기 중</div>
+      <div class="frame-counter" id="frameCounter">프레임: 0</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="startBtn" class="btn-primary">실시간 스트리밍 시작</button>
+    <button id="stopBtn" class="btn-secondary" disabled>스트리밍 중지</button>
+    <button id="recordBtn" class="btn-record" disabled>🎵 녹음 시작</button>
+    <button id="stopRecordBtn" class="btn-stop-record" disabled>⏹️ 녹음 중지</button>
+  </div>
+
+  <div class="test-controls">
+    <h3>🧪 ConnectionContext 테스트</h3>
+    <button id="createTestConnectionBtn" class="btn-test">➕ 테스트 연결 생성</button>
+    <button id="cleanupTestConnectionBtn" class="btn-test" disabled>🗑️ 테스트 연결 정리</button>
+    <button id="statusTestConnectionBtn" class="btn-test">📊 연결 상태 조회</button>
+    <button id="cleanupAllConnectionsBtn" class="btn-test-danger">🧹 모든 연결 정리</button>
+  </div>
+
+  <div class="data-controls">
+    <h3>📨 데이터 전송 테스트</h3>
+    <button id="sendVideoDataBtn" class="btn-data" disabled>🎥 비디오 데이터 전송</button>
+    <button id="sendAudioDataBtn" class="btn-data" disabled>🔊 오디오 데이터 전송</button>
+    <button id="sendControlDataBtn" class="btn-data" disabled>🎛️ 제어 메시지 전송</button>
+    <button id="sendCustomDataBtn" class="btn-data" disabled>📄 커스텀 데이터 전송</button>
+  </div>
+
+  <div class="test-results">
+    <h4>테스트 결과</h4>
+    <div id="testResults" class="test-output">테스트를 시작하려면 버튼을 클릭하세요.</div>
+  </div>
+
+  <div class="connection-info">
+    <div class="info-row">
+      <span>연결 상태:</span>
+      <span id="connectionStatus" class="status-text">대기 중</span>
+    </div>
+    <div class="info-row">
+      <span>전송 프레임:</span>
+      <span id="sentFrames" class="status-text">0</span>
+    </div>
+    <div class="info-row">
+      <span>전송 속도:</span>
+      <span id="frameRate" class="status-text">0 FPS</span>
+    </div>
+    <div class="info-row">
+      <span>연결 시간:</span>
+      <span id="connectionTime" class="status-text">00:00</span>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
