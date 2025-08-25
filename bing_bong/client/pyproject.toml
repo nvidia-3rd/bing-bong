@@ -18,14 +18,19 @@ dependencies = [
 
 
 [tool.poetry.dependencies]
-python = "^3.10"                 # 3.10 고정 추천
+python = ">=3.10,<3.12"              # 3.10 고정 추천
 numpy = "^1.19.3,<2.0.0"         # streamlit과 호환되는 버전
 opencv-python-headless = "^4.8.0"
 av = "^10.0.0"                   # 안정적인 버전
 streamlit = "~1.28.0"
 streamlit-webrtc = "~0.47.0"
 httpx = "^0.28.1"
+soundfile = "^0.13.1"
+pyaudio = "0.2.14"
 
+# === 음성처리 ===
+webrtcvad="^2.0.10"          # 음성구간검출
+scipy="^1.11"
 
 [tool.poetry.scripts]
 client_app = "app:main"          # app.py에 def main(): … 추가
