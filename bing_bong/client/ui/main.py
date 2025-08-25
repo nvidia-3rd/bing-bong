@@ -1,7 +1,7 @@
 import streamlit as st
 
 
-def render_main(ctx, session_id: str, metrics, errbuf, frame_q) -> None:
+def render_main(ctx, session_id: str, metrics, errbuf, frame_q, data_pipeline) -> None:
     # 헤더
     st.title("🎥 WebRTC Proxy (Streamlit → FastAPI)")
 
@@ -24,7 +24,6 @@ def render_main(ctx, session_id: str, metrics, errbuf, frame_q) -> None:
     u2.metric("Aud samples", astats.get("samples", 0))
     u3.metric("Aud bytes", astats.get("bytes", 0))
 
-
     # 수집 상태 캡션
     st.caption(
         f"Receiver: {bool(getattr(ctx, 'audio_receiver', None))} / "
@@ -38,4 +37,49 @@ def render_main(ctx, session_id: str, metrics, errbuf, frame_q) -> None:
             for e in errs[:10]:
                 st.warning(e)
 
+    # 감정 요약 실시간 표시 (emotion_summary_q → 최근 1개)
+    EMOJI = {
+        "happy": "😊",
+        "sad": "😢",
+        "angry": "😠",
+        "fear": "😨",
+        "surprise": "😮",
+        "disgust": "🤢",
+        "neutral": "😐",
+    }
 
+    emo_placeholder = st.empty()
+    last_summary = st.session_state.get("last_emotion_summary")
+    
+    # data_pipeline에서 감정 요약 큐 드레인
+    if data_pipeline and data_pipeline.emotion_summary_q:
+        while True:
+            try:
+                item = data_pipeline.emotion_summary_q.get_nowait()
+                last_summary = item
+            except Exception:
+                break
+    
+    if last_summary:
+        st.session_state.last_emotion_summary = last_summary
+        label = str(last_summary.get("label", "neutral"))
+        score = float(last_summary.get("score", 0.0))
+        emoji = EMOJI.get(label, "😐")
+        emo_placeholder.markdown(f"{emoji} 현재 감정: **{label}** ({score:.2f})")
+
+    # 최근 전사 텍스트 표시 (transcript_q → 최근 1개)
+    tr_placeholder = st.empty()
+    last_txt = st.session_state.get("last_transcript_text")
+    
+    # data_pipeline에서 전사 큐 드레인
+    if data_pipeline and data_pipeline.transcript_q:
+        while True:
+            try:
+                t = data_pipeline.transcript_q.get_nowait()
+                last_txt = t
+            except Exception:
+                break
+    
+    if last_txt:
+        st.session_state.last_transcript_text = last_txt
+        tr_placeholder.markdown(f"��️ 전사: {last_txt}")
