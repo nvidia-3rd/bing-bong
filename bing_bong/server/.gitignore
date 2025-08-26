@@ -179,3 +179,6 @@ pyrightconfig.json
 poetry.lock
 .env
 *.wav
+__pycache__/
+__init__
+vector_store_faiss/

@@ -466,3 +466,126 @@ class DualAudioService:
         status = self.get_pyaudio_status()
         for key, value in status.items():
             print(f"  - {key}: {value}")
+
+    def get_stats(self) -> Dict[str, Any]:
+        """통계 정보 반환"""
+        return self.stats.copy()
+    
+    def play_audio(self, audio_bytes: bytes) -> bool:
+        """오디오 바이트 데이터를 재생"""
+        try:
+            print(f"[DualAudio] 🎵 오디오 재생 시작: {len(audio_bytes)} bytes")
+            
+            # 오디오 형식 자동 감지
+            if audio_bytes.startswith(b'RIFF'):
+                audio_format = "wav"
+                print(f"[DualAudio] 🔍 WAV 형식 감지됨")
+            elif audio_bytes.startswith(b'\xff\xfb') or audio_bytes.startswith(b'\xff\xf3') or audio_bytes.startswith(b'ID3'):
+                audio_format = "mp3"
+                print(f"[DualAudio] 🔍 MP3 형식 감지됨")
+            else:
+                audio_format = "mp3"  # 기본값
+                print(f"[DualAudio] 🔍 기본 MP3 형식으로 시도")
+            
+            # 임시 파일 생성
+            import tempfile
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{audio_format}") as temp_file:
+                temp_file.write(audio_bytes)
+                temp_file_path = temp_file.name
+            
+            print(f"[DualAudio] 📁 임시 파일 생성: {temp_file_path}")
+            
+            # macOS에서 안전한 오디오 재생
+            try:
+                # 방법 1: afplay 사용 (macOS 전용)
+                import platform
+                if platform.system() == "Darwin":  # macOS
+                    print("[DualAudio] 🔄 macOS afplay로 재생 시도...")
+                    import subprocess
+                    result = subprocess.run(["afplay", temp_file_path], 
+                                         capture_output=True, 
+                                         text=True, 
+                                         timeout=30)
+                    
+                    if result.returncode == 0:
+                        print("[DualAudio] ✅ afplay로 오디오 재생 성공!")
+                        # 임시 파일 정리
+                        try:
+                            os.unlink(temp_file_path)
+                        except:
+                            pass
+                        return True
+                    else:
+                        print(f"[DualAudio] ❌ afplay 실패: {result.stderr}")
+                
+                # 방법 2: pydub 사용
+                try:
+                    import pydub
+                    from pydub.playback import play
+                    
+                    audio = pydub.AudioSegment.from_file(temp_file_path)
+                    print(f"[DualAudio] ✅ pydub로 오디오 로드 성공: {len(audio)}ms")
+                    
+                    # 백그라운드에서 재생
+                    def play_audio():
+                        try:
+                            play(audio)
+                            print("[DualAudio] 🎵 pydub로 오디오 재생 완료!")
+                        except Exception as e:
+                            print(f"[DualAudio] ❌ pydub 재생 오류: {e}")
+                    
+                    # 별도 스레드에서 재생 (UI 블로킹 방지)
+                    import threading
+                    audio_thread = threading.Thread(target=play_audio, daemon=True)
+                    audio_thread.start()
+                    
+                    # 임시 파일 정리
+                    try:
+                        os.unlink(temp_file_path)
+                    except:
+                        pass
+                    
+                    return True
+                    
+                except Exception as pydub_error:
+                    print(f"[DualAudio] ⚠️ pydub 재생 실패: {pydub_error}")
+                
+                # 방법 3: pygame 사용 (fallback)
+                try:
+                    import pygame
+                    print("[DualAudio] 🔄 pygame으로 재생 시도...")
+                    
+                    if not pygame.mixer.get_init():
+                        pygame.mixer.init()
+                    
+                    pygame.mixer.music.load(temp_file_path)
+                    pygame.mixer.music.play()
+                    
+                    # 재생 완료까지 대기 (최대 30초)
+                    import time
+                    start_time = time.time()
+                    while pygame.mixer.music.get_busy() and (time.time() - start_time) < 30:
+                        time.sleep(0.1)
+                    
+                    print("[DualAudio] ✅ pygame으로 오디오 재생 성공!")
+                    
+                    # 임시 파일 정리
+                    try:
+                        os.unlink(temp_file_path)
+                    except:
+                        pass
+                    
+                    return True
+                    
+                except Exception as pygame_error:
+                    print(f"[DualAudio] ❌ pygame 재생도 실패: {pygame_error}")
+                
+                return False
+                
+            except Exception as e:
+                print(f"[DualAudio] ❌ 오디오 재생 중 오류: {e}")
+                return False
+                
+        except Exception as e:
+            print(f"[DualAudio] ❌ play_audio 함수 오류: {e}")
+            return False

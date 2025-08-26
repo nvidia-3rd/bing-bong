@@ -31,6 +31,8 @@ pyaudio = "0.2.14"
 # === 음성처리 ===
 webrtcvad="^2.0.10"          # 음성구간검출
 scipy="^1.11"
+pygame = "^2.6.1"
+pydub = "^0.25.1"
 
 [tool.poetry.scripts]
 client_app = "app:main"          # app.py에 def main(): … 추가

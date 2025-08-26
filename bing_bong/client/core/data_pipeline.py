@@ -28,6 +28,11 @@ class DataPipeline:
         self.transcript_q = queue.Queue(maxsize=4)
         self.session_summary_q = queue.Queue(maxsize=2)
         
+        # 콜백 함수들
+        self.on_transcript_added = None
+        self.on_emotion_added = None
+
+        
         print(f"[INFO] DataPipeline 초기화 완료 - 프레임큐:{max_frame_queue_size}, 요약큐:{max_summary_queue_size}")
     
     def safe_put(self, target_queue: queue.Queue, item: Any, drop_old: bool = True) -> bool:
@@ -58,6 +63,19 @@ class DataPipeline:
             
             # 항목 추가
             target_queue.put_nowait(item)
+            
+            # 콜백 호출
+            if target_queue == self.transcript_q and self.on_transcript_added:
+                try:
+                    self.on_transcript_added(item)
+                except Exception as e:
+                    print(f"[ERROR] transcript 콜백 호출 오류: {e}")
+            elif target_queue == self.emotion_summary_q and self.on_emotion_added:
+                try:
+                    self.on_emotion_added(item)
+                except Exception as e:
+                    print(f"[ERROR] emotion 콜백 호출 오류: {e}")
+            
             return True
             
         except queue.Full:

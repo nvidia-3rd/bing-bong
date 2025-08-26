@@ -8,64 +8,16 @@ from service.video.video_service import VideoService
 from service.audio.audio_service import AudioService
 from service.llm.llm_service import LlmService
 
-
-
-# 세션 타임아웃 설정 (30분)
-SESSION_TIMEOUT_SECONDS = 30 * 60
-
 app = FastAPI()
-SESSIONS = {}  # 데모용 인메모리. 실제론 Redis/DB 권장.
 video_service = VideoService()
 audio_service = AudioService()
 llm_service = LlmService()
 
 
-class StartReq(BaseModel):
-    session_id: str
-    meta: Optional[dict] = None
-    ts: float
-
-class HeartbeatReq(BaseModel):
-    session_id: str
-    ts: float
-
-class StopReq(BaseModel):
-    session_id: str
-    ts: float
-
 class LlmRequestModel(BaseModel):
     audio_text: str
     emotion_summary: List[dict]
-    session_id: str
-
-
-@app.post("/sessions/start")
-async def start(req: StartReq):
-    SESSIONS[req.session_id] = {"started_at": req.ts, "meta": req.meta, "last_hb": req.ts, "frames": 0, "data_msgs": 0}
-    return {"ok": True}
-
-@app.post("/sessions/heartbeat")
-async def heartbeat(req: HeartbeatReq):
-    s = SESSIONS.get(req.session_id)
-    if s:
-        s["last_hb"] = req.ts
-        
-        # 세션 타임아웃 체크
-        current_time = time.time()
-        if current_time - s["last_hb"] > SESSION_TIMEOUT_SECONDS:
-            print(f"🕐 세션 타임아웃: {req.session_id} (마지막 heartbeat: {current_time - s['last_hb']:.1f}초 전)")
-            SESSIONS.pop(req.session_id, None)
-            return {"ok": False, "error": "Session timeout"}
-    
-    return {"ok": True}
-
-@app.post("/sessions/stop")
-async def stop(req: StopReq):
-    s = SESSIONS.pop(req.session_id, None)
-    if s:
-        duration = time.time() - s.get("started_at", time.time())
-        print(f"✅ 세션 종료: {req.session_id} (지속시간: {duration:.1f}초)")
-    return {"ok": True, "summary": s or {}}
+    session_id: str  # 세션 ID는 여전히 필요 (로깅용)
 
 # 사진 처리 api
 @app.post("/ingest/frame")
@@ -74,33 +26,31 @@ async def ingest_frame(
     session_id: str = Form(...),
     ts: str = Form(...)
 ):
-    
-    content = await file.read()
-
     try:
+        content = await file.read()
+        print(f"[Frame] 📸 프레임 수신: {len(content)} bytes, session_id={session_id}")
+        
+        # 이미지 변환
         img_bgr = ConvertThings.bytes_to_bgr(content)
-    except Exception:
-        raise Exception(400, "invalid image")
-
-    s = SESSIONS.get(session_id)
-      
-    if not s:
-        s = SESSIONS.setdefault(session_id, {"started_at": float(ts), "frames": 0, "data_msgs": 0})
-
-    s["frames"] += 1
-    s["last_frame_ts"] = time.time()
-
-    # 동기 추론을 비동기 컨텍스트에서 실행(서비스 래퍼 사용)
-    result = await video_service.to_inference_by_frame(img_bgr, session_id)
-    print(f"가장 강한 감정은: {max(result, key=result.get)}")
- 
-    return WebRTCImageResponse(
-        success=True,
-        message="success",
-        data=result,
-        timestamp=time.time(),
-        session_id=session_id
-    )
+        print(f"[Frame] ✅ 이미지 변환 완료: {img_bgr.shape}")
+        
+        # 비동기 추론 실행
+        result = await video_service.to_inference_by_frame(img_bgr, session_id)
+        print(f"[Frame] 🎭 감정 분석 완료: {result}")
+        print(f"[Frame] 🏆 가장 강한 감정: {max(result, key=result.get)}")
+        
+        return WebRTCImageResponse(
+            success=True,
+            message="success",
+            data=result,
+            timestamp=time.time(),
+            session_id=session_id
+        )
+        
+    except Exception as e:
+        print(f"[Frame] ❌ 프레임 처리 오류: {e}")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"프레임 처리 실패: {str(e)}")
 
 
 @app.post("/ingest/audio")
@@ -109,30 +59,81 @@ async def ingest_audio(
     session_id: str = Form(...),
     ts: str = Form(...),
 ):
-    content = await file.read()
-    print(f"{session_id} fastapi audio bytes={len(content)}")
-    print(f"{session_id} fastapi audio type = {type(file)}")
-    s = SESSIONS.get(session_id)
-    if s:
-        s["audio_bytes"] = s.get("audio_bytes", 0) + len(content)
-   
-    result = audio_service.get_audio_analysis(content)
-    print(f"result: {result}")
-
-    # OpenAI 응답 객체는 .text 속성에 전사 결과가 담김
-    transcript_text = None
     try:
-        transcript_text = getattr(result, "text", None)
-    except Exception:
-        transcript_text = None
+        content = await file.read()
+        print(f"[Audio] 🎵 오디오 수신: {len(content)} bytes, session_id={session_id}")
+        print(f"[Audio] 📁 파일 타입: {file.content_type}")
         
-    return {"ok": True, "bytes": len(content), "transcript": transcript_text}
+        # 오디오 분석 실행 (동기 함수를 비동기 컨텍스트에서 실행)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, audio_service.get_audio_analysis, content)
+        print(f"[Audio] 🎤 오디오 분석 완료: {result}")
+        
+        # OpenAI 응답 객체에서 전사 결과 추출
+        transcript_text = None
+        try:
+            transcript_text = getattr(result, "text", None)
+            if transcript_text:
+                print(f"[Audio] 📝 전사 결과: {transcript_text[:100]}...")
+            else:
+                print("[Audio] ⚠️ 전사 결과가 없습니다")
+        except Exception as e:
+            print(f"[Audio] ❌ 전사 결과 추출 실패: {e}")
+            transcript_text = None
+        
+        return {
+            "ok": True, 
+            "bytes": len(content), 
+            "transcript": transcript_text,
+            "session_id": session_id
+        }
+        
+    except Exception as e:
+        print(f"[Audio] ❌ 오디오 처리 오류: {e}")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"오디오 처리 실패: {str(e)}")
 
 
 @app.post("/llm/request")
 async def llm_request(req: LlmRequestModel):
-
-    print(f"llm_request  text  : {req.audio_text}")
-    print(f"llm_request  list  : {req.emotion_summary}")
-
-    return {"ok": True, "result": "result"}
+    try:
+        print(f"[LLM] 🚀 LLM 요청 시작:")
+        print(f"[LLM] 📝 오디오 텍스트: {req.audio_text[:100]}...")
+        print(f"[LLM] 🎭 감정 요약: {len(req.emotion_summary)}개 항목")
+        print(f"[LLM] 🆔 세션 ID: {req.session_id}")
+        
+        # LLM 서비스 호출 (동기 함수를 비동기 컨텍스트에서 실행)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        call_to_llm_result = await loop.run_in_executor(
+            None, 
+            llm_service.call_to_llm, 
+            req.audio_text, 
+            req.emotion_summary
+        )
+        
+        # 결과가 bytes인지 확인
+        if isinstance(call_to_llm_result, bytes):
+            print(f"[LLM] ✅ LLM 처리 완료: {len(call_to_llm_result)} bytes 반환")
+            
+            # bytes를 base64로 인코딩하여 JSON 응답 가능하게 함
+            import base64
+            audio_base64 = base64.b64encode(call_to_llm_result).decode('utf-8')
+            
+            return {
+                "ok": True, 
+                "result": audio_base64,
+                "audio_size_bytes": len(call_to_llm_result),
+                "encoding": "base64",
+                "session_id": req.session_id
+            }
+        else:
+            print(f"[LLM] ⚠️ LLM 결과가 bytes가 아님: {type(call_to_llm_result)}")
+            return {"ok": False, "error": "Invalid result type", "result": ""}
+            
+    except Exception as e:
+        print(f"[LLM] ❌ LLM 요청 처리 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"ok": False, "error": str(e), "result": ""}

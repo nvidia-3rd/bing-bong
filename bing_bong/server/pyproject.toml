@@ -30,6 +30,17 @@ tf-keras = "2.15.0"
 openai = "^1.101.0"
 python-dotenv = "^1.1.1"
 
+# LangChain (core + 커뮤니티 + OpenAI)
+langchain = ">=0.2.10,<0.3.0"
+langchain-community = ">=0.2.10,<0.3.0"
+langchain-openai = ">=0.1.17,<0.3.0"
+
+# FAISS (CPU)
+faiss-cpu = ">=1.7.4,<1.8.0"
+
+# 토크나이저 (OpenAI 임베딩/LLM에서 자주 필요)
+tiktoken = ">=0.7.0,<0.8.0"
+
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

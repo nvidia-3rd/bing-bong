@@ -9,6 +9,7 @@ from typing import Optional, Deque
 import av
 import numpy as np
 import webrtcvad
+from scipy import signal
 from scipy.signal import resample_poly
 
 def _to_mono_f32(arr: np.ndarray) -> np.ndarray:
@@ -53,8 +54,7 @@ class VADBlockAssembler:
         self._have_any_voice = False
         self._last_voice_ts: Optional[float] = None
 
-        # VAD 민감도를 높게 설정 (0: 낮음, 3: 높음)
-        self._vad = webrtcvad.Vad(1)  # 3 → 1로 변경 (더 정확한 음성 감지)
+        self._vad = webrtcvad.Vad(3) 
         self._smooth: Deque[int] = deque(maxlen=5)  # 10 → 5로 변경 (더 빠른 반응)
 
         self._block_start_ts = time.monotonic()
@@ -190,7 +190,6 @@ class VADBlockAssembler:
     def _remove_noise(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
         """🎵 고급 노이즈 제거"""
         try:
-            from scipy import signal
             
             # 1. 고주파 노이즈 제거 (8kHz 이상)
             if sample_rate > 16000:
@@ -218,7 +217,7 @@ class VADBlockAssembler:
     def _optimize_frequency_bands(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
         """🎵 주파수 대역 최적화"""
         try:
-            from scipy import signal
+       
             
             # 1. 음성 주파수 대역 강화 (300Hz ~ 3kHz)
             nyquist = sample_rate / 2
@@ -282,7 +281,6 @@ class VADBlockAssembler:
     def _spectral_balancing(self, audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
         """🎵 스펙트럼 밸런싱"""
         try:
-            from scipy import signal
             
             # 1. 스펙트럼 서브트랙션으로 노이즈 제거
             if len(audio_data) > 1024:
@@ -343,7 +341,6 @@ class VADBlockAssembler:
             
             # 🚀 노이즈 방지: 고품질 리샘플링
             if len(audio_data) > 0:
-                from scipy import signal
                 
                 # 1. 안티앨리어싱 필터 적용
                 if src_rate > dst_rate:
@@ -353,7 +350,6 @@ class VADBlockAssembler:
                     b, a = signal.butter(8, cutoff, btype='low')
                     audio_data = signal.filtfilt(b, a, audio_data)
                 
-                # 2. 고품질 리샘플링 (scipy.signal.resample)
                 target_length = int(len(audio_data) * dst_rate / src_rate)
                 resampled = signal.resample(audio_data, target_length, window='hann')
                 
