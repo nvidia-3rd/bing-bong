@@ -1,6 +1,7 @@
 # app.py
 import streamlit as st
 from pathlib import Path
+from router import route, navigate
 
 st.set_page_config(
     page_title="BingBong",
@@ -40,7 +41,7 @@ with left:
     # 대화 페이지로 이동 버튼
     if st.button("빙봉과 이야기 나눠볼까요?", use_container_width=False):
         # 멀티페이지 구조에서는 쿼리 파라미터로 이동 유도
-        st.switch_page("pages/talk_to_bing_bong.py")
+       ("pages/talk_to_bing_bong.py")
 
 
 with right:
