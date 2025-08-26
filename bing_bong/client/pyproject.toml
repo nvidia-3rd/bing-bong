@@ -37,6 +37,7 @@ pydub = "^0.25.1"
 [tool.poetry.scripts]
 client_app = "app:main"          # app.py에 def main(): … 추가
 
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
