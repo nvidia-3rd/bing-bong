@@ -54,7 +54,7 @@ class DataPipeline:
                         break
                 
                 if dropped_count > 0:
-                    print(f"[DEBUG] 큐 백프레셔: {dropped_count}개 항목 드롭됨")
+                    pass        
             
             # 항목 추가
             target_queue.put_nowait(item)
@@ -154,7 +154,7 @@ class DataPipeline:
             except queue.Empty:
                 break
         
-        print(f"[DEBUG] 큐 드레인 완료: {len(items)}개 항목 추출됨")
+
         return items
     
     def peek_queue(self, queue_name: str, max_items: int = 5) -> List[Any]:

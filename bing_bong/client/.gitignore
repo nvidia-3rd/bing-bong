@@ -182,3 +182,4 @@ pyrightconfig.json
 .venv
 poetry.lock
 .env
+/recordings

@@ -1,16 +1,24 @@
-from fastapi import FastAPI, UploadFile, File, Form, Body, Request
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import time
 from model.dto.WebRTCImageResponse import WebRTCImageResponse
 from util.convert_things import ConvertThings
 from service.video.video_service import VideoService
 from service.audio.audio_service import AudioService
+from service.llm.llm_service import LlmService
+
+
+
+# 세션 타임아웃 설정 (30분)
+SESSION_TIMEOUT_SECONDS = 30 * 60
 
 app = FastAPI()
 SESSIONS = {}  # 데모용 인메모리. 실제론 Redis/DB 권장.
 video_service = VideoService()
 audio_service = AudioService()
+llm_service = LlmService()
+
 
 class StartReq(BaseModel):
     session_id: str
@@ -25,11 +33,11 @@ class StopReq(BaseModel):
     session_id: str
     ts: float
 
-class DataReq(BaseModel):
+class LlmRequestModel(BaseModel):
+    audio_text: str
+    emotion_summary: List[dict]
     session_id: str
-    label: str
-    data: str
-    ts: float
+
 
 @app.post("/sessions/start")
 async def start(req: StartReq):
@@ -41,11 +49,22 @@ async def heartbeat(req: HeartbeatReq):
     s = SESSIONS.get(req.session_id)
     if s:
         s["last_hb"] = req.ts
+        
+        # 세션 타임아웃 체크
+        current_time = time.time()
+        if current_time - s["last_hb"] > SESSION_TIMEOUT_SECONDS:
+            print(f"🕐 세션 타임아웃: {req.session_id} (마지막 heartbeat: {current_time - s['last_hb']:.1f}초 전)")
+            SESSIONS.pop(req.session_id, None)
+            return {"ok": False, "error": "Session timeout"}
+    
     return {"ok": True}
 
 @app.post("/sessions/stop")
 async def stop(req: StopReq):
     s = SESSIONS.pop(req.session_id, None)
+    if s:
+        duration = time.time() - s.get("started_at", time.time())
+        print(f"✅ 세션 종료: {req.session_id} (지속시간: {duration:.1f}초)")
     return {"ok": True, "summary": s or {}}
 
 # 사진 처리 api
@@ -110,41 +129,10 @@ async def ingest_audio(
     return {"ok": True, "bytes": len(content), "transcript": transcript_text}
 
 
-# 바이너리 직송 (multipart 미사용)
-@app.post("/ingest/frame_bin")
-async def ingest_frame_bin(request: Request, session_id: str, ts: float):
-    content = await request.body()
-    try:
-        img_bgr = ConvertThings.bytes_to_bgr(content)
-    except Exception:
-        raise Exception(400, "invalid image")
+@app.post("/llm/request")
+async def llm_request(req: LlmRequestModel):
 
-    s = SESSIONS.get(session_id)
-    if not s:
-        s = SESSIONS.setdefault(session_id, {"started_at": ts, "frames": 0, "data_msgs": 0})
-    s["frames"] += 1
-    s["last_frame_ts"] = time.time()
+    print(f"llm_request  text  : {req.audio_text}")
+    print(f"llm_request  list  : {req.emotion_summary}")
 
-    result = await video_service.to_inference_by_frame(img_bgr, session_id)
-    return WebRTCImageResponse(
-        success=True,
-        message="success",
-        data=result,
-        timestamp=time.time(),
-        session_id=session_id
-    )
-
-
-@app.post("/ingest/audio_bin")
-async def ingest_audio_bin(request: Request, session_id: str, ts: float):
-    content = await request.body()
-    s = SESSIONS.get(session_id)
-    if s:
-        s["audio_bytes"] = s.get("audio_bytes", 0) + len(content)
-    result = audio_service.get_audio_analysis(content)
-    transcript_text = None
-    try:
-        transcript_text = getattr(result, "text", None)
-    except Exception:
-        transcript_text = None
-    return {"ok": True, "bytes": len(content), "transcript": transcript_text}
+    return {"ok": True, "result": "result"}

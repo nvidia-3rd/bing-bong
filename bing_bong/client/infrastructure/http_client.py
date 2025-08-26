@@ -3,6 +3,7 @@ import httpx
 import streamlit as st
 import time
 from .config import API_BASE
+from .dto.llm_request_model import LlmRequestModel
 
 ## fastapi로 호출하는 client
 @st.cache_resource
@@ -44,4 +45,11 @@ async def post_audio(http: httpx.AsyncClient, session_id: str, wav_data: bytes, 
         errbuf.push(f"/ingest/audio 실패: {e}")
         return None
 
+async def post_llm_request(http: httpx.AsyncClient, model: LlmRequestModel, timeout: float = 10.0):
+    """LLM 요청을 전송합니다."""
+    
+    r = await post_json(http, "/llm/request", model.to_dict(), timeout=timeout)
+    r.raise_for_status()
+
+    return r
 

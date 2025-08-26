@@ -27,12 +27,12 @@ class EmotionService:
             try:
                 emotion_data = target_queue.get_nowait()
                 video_emotions.append(emotion_data)
-                print(f"[DEBUG] EmotionService: 큐에서 감정 데이터 추출 - {emotion_data}")
+
             except queue.Empty:
                 break
 
         if not video_emotions:
-            print("[DEBUG] EmotionService: 처리할 감정 데이터가 없음")
+
             return None
 
         # 2) 감정 키 수집 (숫자 데이터만)
@@ -48,10 +48,10 @@ class EmotionService:
                         except (ValueError, TypeError):
                             continue  # 숫자가 아니면 건너뛰기
 
-        print(f"[DEBUG] EmotionService: 수집된 감정 키들 - {keys}")
+
 
         if not keys:
-            print("[DEBUG] EmotionService: 유효한 감정 키가 없음")
+
             return {
                 "type": "video",
                 "label": "none",
@@ -76,7 +76,7 @@ class EmotionService:
         means = {k: (v / n) for k, v in sums.items()}
         label = max(means, key=means.get) if means else "none"
 
-        print(f"[DEBUG] EmotionService: 감정 평균 계산 완료 - 주요 감정: {label}, 점수: {means.get(label, 0.0):.3f}")
+
 
         # 4) summary dict
         summary = {
@@ -161,7 +161,7 @@ class EmotionService:
         """Audio 전사 결과를 추가합니다."""
         if audio_transcript:
             self.audio_transcripts.append(audio_transcript)
-            print(f"[DEBUG] EmotionService: 오디오 전사 결과 추가 - {audio_transcript[:50]}...")
+
             # 큐가 가득차면 오래된 데이터 제거
             if len(self.audio_transcripts) > 10:  # 최대 10개 유지
                 self.audio_transcripts.pop(0)

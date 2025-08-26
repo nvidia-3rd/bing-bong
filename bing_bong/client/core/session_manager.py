@@ -38,7 +38,10 @@ class SessionManager:
     
     async def stop_session(self) -> bool:
         """세션을 종료합니다."""
+        # 세션 종료는 한 번만 실행되므로 로그 플래그 불필요
+        
         if not self.session_started:
+            print("[Session] ℹ️ 세션이 이미 종료된 상태입니다")
             return True
             
         try:
@@ -46,11 +49,15 @@ class SessionManager:
                 "session_id": self.session_id,
                 "ts": time.time()
             }
+            print(f"[Session] 📤 POST /sessions/stop 요청 전송: {payload}")
             await post_json(self.http, "/sessions/stop", payload)
             self.session_started = False
+            print("[Session] ✅ 세션 종료 완료")
             return True
         except Exception as e:
-            print(f"세션 종료 실패: {e}")
+            print(f"[Session] ❌ 세션 종료 실패: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def get_session_info(self) -> dict:

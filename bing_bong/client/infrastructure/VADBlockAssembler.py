@@ -1,6 +1,5 @@
 # infrastructure/VADBlockAssembler.py
 import asyncio
-import io
 import time
 from collections import deque
 from math import gcd
@@ -10,7 +9,6 @@ from typing import Optional, Deque
 import av
 import numpy as np
 import webrtcvad
-import soundfile as sf
 from scipy.signal import resample_poly
 
 def _to_mono_f32(arr: np.ndarray) -> np.ndarray:
@@ -41,19 +39,7 @@ def _f32_to_i16(arr: np.ndarray) -> np.ndarray:
     """float32를 int16으로 변환"""
     return np.clip(arr * 32767.0, -32768, 32767).astype(np.int16)
 
-def _norm_once_f32(arr: np.ndarray, target: float = 0.98) -> np.ndarray:
-    """정규화"""
-    peak = float(np.max(np.abs(arr))) if arr.size else 0.0
-    if peak > 1e-6:
-        return arr * (target / peak)
-    return arr
 
-def _wrap_wav_bytes(pcm16_bytes: bytes, sample_rate: int) -> bytes:
-    """PCM16 bytes를 WAV 포맷으로 래핑"""
-    pcm16_arr = np.frombuffer(pcm16_bytes, dtype=np.int16)
-    bio = io.BytesIO()
-    sf.write(bio, pcm16_arr, sample_rate, subtype="PCM_16", format="WAV")
-    return bio.getvalue()
 
 class VADBlockAssembler:
     def __init__(self, out_queue: Optional[asyncio.Queue] = None):
@@ -151,7 +137,6 @@ class VADBlockAssembler:
             
             # 🚨 노이즈 방지: 데이터 품질 검증
             if not self._validate_audio_quality(arr_enhanced):
-                print(f"[VAD] 🚨 낮은 품질 프레임 무시: SNR 부족")
                 return
             
             # 🚨 노이즈 방지: 고품질 리샘플링 (48kHz → 16kHz)
@@ -195,7 +180,7 @@ class VADBlockAssembler:
             # 🚀 4단계: 스펙트럼 밸런싱
             audio_balanced = self._spectral_balancing(audio_compressed, sample_rate)
             
-            print(f"[VAD] 🎵 오디오 품질 향상 완료: {len(audio_data)} → {len(audio_balanced)} samples")
+            # print(f"[VAD] 🎵 오디오 품질 향상 완료: {len(audio_data)} → {len(audio_balanced)} samples")
             return audio_balanced
             
         except Exception as e:
@@ -340,27 +325,10 @@ class VADBlockAssembler:
             peak = np.max(np.abs(audio_data))
             dynamic_range = 20 * np.log10(peak / (rms + 1e-10))
             
-            print(f"[VAD] 🔍 품질 분석: SNR={snr:.1f}dB, RMS={rms:.6f}, Peak={peak:.6f}, DR={dynamic_range:.1f}dB")
-            
-            # 🚨 노이즈 방지: SNR 임계값을 현실적으로 조정
-            if snr < -2.0:  # 0.5dB → -2.0dB로 대폭 완화 (실제 환경에 맞춤)
-                print(f"[VAD] 🚨 낮은 SNR: {snr:.1f}dB (임계값: -2.0dB)")
+            # 품질 검증 (조용히 처리)
+            if snr < -2.0 or rms < 0.0001 or rms > 0.95 or dynamic_range < 2:
                 return False
             
-            if rms < 0.0001:  # 0.001 → 0.0001로 완화 (더 민감하게)
-                print(f"[VAD] 🚨 너무 약한 신호: RMS={rms:.6f}")
-                return False
-            
-            if rms > 0.95:  # 클리핑 위험
-                print(f"[VAD] 🚨 클리핑 위험: RMS={rms:.6f}")
-                return False
-            
-            # 🎯 추가 검증: 다이나믹 레인지가 너무 좁으면 노이즈 의심
-            if dynamic_range < 2:  # 5dB → 2dB로 완화 (실제 음성에 맞춤)
-                print(f"[VAD] 🚨 너무 좁은 다이나믹 레인지: {dynamic_range:.1f}dB")
-                return False
-            
-            print(f"[VAD] ✅ 품질 검증 통과: SNR={snr:.1f}dB, RMS={rms:.6f}, DR={dynamic_range:.1f}dB")
             return True
             
         except Exception as e:
@@ -470,7 +438,7 @@ class VADBlockAssembler:
             converted_rms = np.sqrt(np.mean(int16_data.astype(np.float32)**2))
             quality_score = (converted_rms / 16384.0) * 100  # 0-100 스케일
             
-            print(f"[VAD] 🎵 int16 변환 품질: 원본 RMS={rms:.6f}, 변환 RMS={converted_rms:.1f}, 품질점수={quality_score:.1f}%")
+            # print(f"[VAD] 🎵 int16 변환 품질: 원본 RMS={rms:.6f}, 변환 RMS={converted_rms:.1f}, 품질점수={quality_score:.1f}%")
             
             return int16_data
             
@@ -521,9 +489,9 @@ class VADBlockAssembler:
             self._voiced_frames += 1
             self._last_voice_ts = now
             self._have_any_voice = True
-            print(f"[VAD] 🎤 음성 감지됨! (프레임 {self._total_frames}, 음성 프레임: {self._voiced_frames})")
-        else:
-            print(f"[VAD] 🔇 무음 프레임 (프레임 {self._total_frames}, 음성 프레임: {self._voiced_frames})")
+
+        # else:
+        #     print(f"[VAD] 🔇 무음 프레임 (프레임 {self._total_frames}, 음성 프레임: {self._voiced_frames})")
 
         # 🎯 음성 품질 향상: 15초 블록 + 조기 플러시 로직
         self._check_block_completion()
@@ -545,41 +513,22 @@ class VADBlockAssembler:
             voiced_ms = self._voiced_frames * self._FRAME_MS
             block_size_seconds = len(self._block) / (self._RATE * self._SAMPLE_WIDTH * self._CHANNELS)
             
-            print(f"[VAD] 🎯 블록 완료 처리:")
-            print(f"  - 블록 크기: {len(self._block)} bytes ({block_size_seconds:.1f}s)")
-            print(f"  - 음성 프레임: {self._voiced_frames}/{self._total_frames}")
-            print(f"  - 음성 비율: {voice_ratio:.1%}")
-            print(f"  - 음성 시간: {voiced_ms}ms")
-            print(f"  - 완화 모드: {'예' if relaxed else '아니오'}")
-            
-            # 품질 기준 확인
-            if relaxed:
-                # 조기 플러시: 완화된 기준
-                min_voice_ms = self._EARLY_MIN_VOICE_MS
-                min_voice_ratio = self._EARLY_VOICE_RATIO_MIN
-                print(f"  - 조기 플러시 기준: {min_voice_ms}ms, {min_voice_ratio:.1%}")
-            else:
-                # 15초 블록: 엄격한 기준
-                min_voice_ms = self._MIN_VOICE_MS
-                min_voice_ratio = self._VOICE_RATIO_MIN
-                print(f"  - 15초 블록 기준: {min_voice_ms}ms, {min_voice_ratio:.1%}")
+            # 블록 완료 처리 (조용히)
             
             # 품질 기준 통과 확인
+            min_voice_ms = self._EARLY_MIN_VOICE_MS if relaxed else self._MIN_VOICE_MS
+            min_voice_ratio = self._EARLY_VOICE_RATIO_MIN if relaxed else self._VOICE_RATIO_MIN
+            
             if voiced_ms >= min_voice_ms and voice_ratio >= min_voice_ratio:
-                print(f"[VAD] ✅ 품질 기준 통과: 블록 생성")
-                
                 # 블록을 큐에 추가
                 block_data = bytes(self._block)
                 try:
                     self.out_q.put_nowait(block_data)
                     self._stats['blocks_created'] += 1
                     self._stats['last_block_ts'] = time.monotonic()
-                    print(f"[VAD] ✅ 블록을 큐에 추가 완료: 큐 크기 {self.out_q.qsize()}")
                 except asyncio.QueueFull:
-                    print(f"[VAD] ❌ 큐가 가득 참: 블록 드롭")
                     self._stats['blocks_dropped'] += 1
             else:
-                print(f"[VAD] ❌ 품질 기준 미달: 블록 드롭")
                 self._stats['blocks_dropped'] += 1
             
             # 블록 상태 초기화
@@ -663,7 +612,7 @@ class VADBlockAssembler:
                 voice_ratio = (self._voiced_frames / self._total_frames) if self._total_frames else 0.0
                 voiced_ms = self._voiced_frames * self._FRAME_MS
                 block_progress = (len(self._block) / self._BLOCK_BYTES) * 100
-                print(f"[VAD] 📊 블록 진행 상황: {block_progress:.1f}% ({len(self._block)}/{self._BLOCK_BYTES} bytes), 음성비율={voice_ratio:.1%}, 음성시간={voiced_ms}ms")
+    
 
     def _check_early_flush(self):
         """조기 플러시 조건 확인"""
@@ -696,7 +645,7 @@ class VADBlockAssembler:
                     voice_ratio = (self._voiced_frames / self._total_frames) if self._total_frames else 0.0
                     voiced_ms = self._voiced_frames * self._FRAME_MS
                     remaining_silence = self._SILENCE_TIMEOUT_SEC - silence_duration
-                    print(f"[VAD] ⏳ 조기 플러시 대기: 무음지속={silence_duration:.1f}s, 남은시간={remaining_silence:.1f}s, 음성비율={voice_ratio:.1%}, 음성시간={voiced_ms}ms")
+        
 
     def _force_block_generation_check(self):
         """강제 블록 생성 체크 (더 자주 블록 생성)"""
@@ -705,17 +654,14 @@ class VADBlockAssembler:
             voiced_ms = self._voiced_frames * self._FRAME_MS
             block_size_seconds = len(self._block) / (self._RATE * self._SAMPLE_WIDTH * self._CHANNELS)
             
-            print(f"[VAD] 🔧 강제 블록 생성 체크: 크기={len(self._block)} bytes ({block_size_seconds:.1f}s), 음성비율={voice_ratio:.1%}, 음성시간={voiced_ms}ms")
+
             
             # 더 완화된 기준으로 블록 생성 시도
             if (voiced_ms >= 200 and  # 200ms 이상 음성
                 voice_ratio >= 0.03 and  # 3% 이상 음성
                 block_size_seconds >= 1.0):  # 1초 이상 블록
                 
-                print(f"[VAD] 🔧 강제 블록 생성 조건 만족: 블록 생성")
                 self._finalize_block(relaxed=True)
-            else:
-                print(f"[VAD] 🔧 강제 블록 생성 조건 미달: 음성시간={voiced_ms}ms, 음성비율={voice_ratio:.1%}, 블록크기={block_size_seconds:.1f}s")
 
     def _reset_block(self):
         """블록 상태 초기화"""
@@ -725,4 +671,4 @@ class VADBlockAssembler:
         self._have_any_voice = False
         self._last_voice_ts = None
         self._block_start_ts = time.monotonic()
-        print(f"[VAD] 🔄 블록 상태 초기화 완료")
+        

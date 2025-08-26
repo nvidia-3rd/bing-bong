@@ -1,9 +1,19 @@
 import streamlit as st
 
 
-def render_main(ctx, session_id: str, metrics, errbuf, frame_q, data_pipeline) -> None:
+def render_main(session_id: str, metrics, errbuf, frame_q, data_pipeline) -> None:
     # 헤더
     st.title("🎥 WebRTC Proxy (Streamlit → FastAPI)")
+    
+    # WebRTC 스트리머 안내
+    st.write("**📹 카메라 및 마이크 권한을 허용한 후 START 버튼을 클릭하세요:**")
+    
+    # WebRTC 스트리머 상태 표시 (렌더링은 app.py에서)
+    if hasattr(st.session_state, 'webrtc_ctx') and st.session_state.webrtc_ctx:
+        st.success("✅ WebRTC 스트리머가 활성화되었습니다.")
+        st.info("🎥 WebRTC 스트리머는 아래에서 렌더링됩니다.")
+    else:
+        st.warning("⚠️ WebRTC 스트리머가 초기화되지 않았습니다. 페이지를 새로고침해주세요.")
 
     # 메트릭 카드
     st.info(f"Session ID: {session_id}")
@@ -26,7 +36,6 @@ def render_main(ctx, session_id: str, metrics, errbuf, frame_q, data_pipeline) -
 
     # 수집 상태 캡션
     st.caption(
-        f"Receiver: {bool(getattr(ctx, 'audio_receiver', None))} / "
         f"SR: {astats.get('sr')} CH: {astats.get('ch')}"
     )
 

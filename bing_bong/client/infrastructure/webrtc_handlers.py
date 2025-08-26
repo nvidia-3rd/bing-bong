@@ -1,21 +1,19 @@
 # webrtc_handlers.py - Streamlit WebRTC 오디오 품질 개선
 import time
 import queue
-import io
-import soundfile as sf
+
 import av
-import cv2
 import asyncio
-import numpy as np
-from typing import Callable, Optional, Any
+from typing import Callable, Optional
 from streamlit_webrtc import AudioProcessorBase
 from infrastructure.VADBlockAssembler import VADBlockAssembler
-import webrtcvad  # VAD 직접 사용
 
 
 from infrastructure.metrics import Metrics
-from infrastructure.http_client import post_json
-from infrastructure.config import JPEG_QUALITY, SAMPLE_EVERY
+from infrastructure.config import SAMPLE_EVERY
+
+
+
 
 def make_video_frame_callback(
     raw_frame_q: "queue.Queue[av.VideoFrame]",
@@ -39,6 +37,7 @@ def make_video_frame_callback(
                     except Exception: pass
                 raw_frame_q.put_nowait(frame)
                 metrics.inc_enq()
+    
             except Exception:
                 pass
         return frame
@@ -81,7 +80,7 @@ class AudioAccumulator:
             self._total_duration += duration
             self._total_bytes += len(wav_bytes)
             
-            print(f"[AudioAccumulator] ✅ WAV 파일 누적: {duration:.1f}초, {len(wav_bytes)} bytes (총 {len(self._wav_files)}개, {self._total_duration:.1f}초)")
+            
             
         except Exception as e:
             print(f"[AudioAccumulator] ❌ VAD 블록 추가 실패: {e}")
@@ -228,86 +227,36 @@ def make_vad_audio_callback_with_accumulator(vad_assembler: VADBlockAssembler, a
             frame_counter["count"] += 1
             current_time = time.monotonic()
             
-            # 🚨 노이즈 방지: 프레임 간격 모니터링
+            # 프레임 간격 체크
             if frame_counter["last_timestamp"] > 0:
                 interval = current_time - frame_counter["last_timestamp"]
                 if interval > 0.025:  # 25ms 이상 간격이면 프레임 손실 의심
                     frame_counter["dropped_frames"] += 1
-                    print(f"[DEBUG-AUDIO] 🚨 프레임 간격 이상: {interval:.3f}s (손실 프레임: {frame_counter['dropped_frames']}개)")
             
             frame_counter["last_timestamp"] = current_time
             
-            # 🔍 DEBUG: 프레임 수신 상태 (올바른 속성 사용)
-            print(f"[DEBUG-AUDIO] 🎵 프레임 #{frame_counter['count']} 수신:")
-            print(f"  - 샘플레이트: {frame.sample_rate}Hz")
-            print(f"  - 레이아웃: {frame.layout.name if hasattr(frame, 'layout') else 'unknown'}")
-            print(f"  - 프레임 크기: {frame.samples} samples")
-            print(f"  - 데이터 타입: {frame.format}")
-            
-            # 🔍 DEBUG: VAD 상태 확인
-            vad_queue_size = vad_assembler.out_q.qsize()
-            print(f"  - VAD 큐 크기: {vad_queue_size}")
-            
-            # 🚨 노이즈 방지: 큐 오버플로우 경고
-            if vad_queue_size > 15:  # 75% 이상 차면 경고
-                print(f"[DEBUG-AUDIO] 🚨 VAD 큐가 가득 참: {vad_queue_size}/20")
-            
             # 1. VAD에 프레임 전달 (음성 블록 생성용)
-            print(f"[DEBUG-AUDIO] 📤 VAD에 프레임 전달 중...")
             vad_assembler.push_av_frame(frame)
-            print(f"[DEBUG-AUDIO] ✅ VAD에 프레임 전달 완료")
-            
-            # 🔍 DEBUG: VAD 처리 후 상태
-            vad_queue_size_after = vad_assembler.out_q.qsize()
-            print(f"  - VAD 처리 후 큐 크기: {vad_queue_size_after}")
             
             # 2. VAD에서 완성된 음성 블록이 있으면 AudioAccumulator에 추가
-            processed_blocks = 0
-            total_bytes = 0
-            
-            print(f"[DEBUG-AUDIO] 🔄 VAD 블록 처리 시작...")
             while not vad_assembler.out_q.empty():
                 try:
                     vad_block = vad_assembler.out_q.get_nowait()
                     if vad_block and len(vad_block) > 0:
-                        print(f"[DEBUG-AUDIO] 📦 VAD 블록 발견: {len(vad_block)} bytes")
-                        
                         # AudioAccumulator에 추가
                         acc.add_vad_block(vad_block)
-                        processed_blocks += 1
-                        total_bytes += len(vad_block)
-                        
-                        print(f"[DEBUG-AUDIO] ✅ VAD 블록 AudioAccumulator에 추가됨")
-                    else:
-                        print(f"[DEBUG-AUDIO] ⚠️ 빈 VAD 블록 무시")
                         
                 except queue.Empty:
-                    print(f"[DEBUG-AUDIO] 🔄 VAD 큐가 비어있음")
                     break
                 except Exception as e:
-                    print(f"[DEBUG-AUDIO] ❌ VAD 블록 처리 실패: {e}")
+                    print(f"[Audio] ❌ VAD 블록 처리 실패: {e}")
             
-            # 🔍 DEBUG: 처리 결과 요약
-            print(f"[DEBUG-AUDIO] 📊 프레임 #{frame_counter['count']} 처리 완료:")
-            print(f"  - 처리된 VAD 블록: {processed_blocks}개")
-            print(f"  - 총 처리 바이트: {total_bytes} bytes")
-            print(f"  - AudioAccumulator 상태: {acc.get_audio_info()}")
-            
-            # 🔍 DEBUG: 주기적 상태 출력 (100프레임마다)
-            if frame_counter["count"] % 100 == 0:
-                print(f"[DEBUG-AUDIO] 🎯 === 100프레임 처리 완료 ===")
-                print(f"  - 총 프레임: {frame_counter['count']}개")
-                print(f"  - 손실 프레임: {frame_counter['dropped_frames']}개")
-                print(f"  - 손실률: {(frame_counter['dropped_frames'] / frame_counter['count']) * 100:.2f}%")
-                print(f"  - VAD 큐 크기: {vad_assembler.out_q.qsize()}")
-                print(f"  - AudioAccumulator 블록: {acc.stats()['wav_files']}개")
-                print(f"  - AudioAccumulator 바이트: {acc.stats()['total_bytes']} bytes")
-                print(f"[DEBUG-AUDIO] ================================")
+            # 주기적 상태 출력 (1000프레임마다)
+            if frame_counter["count"] % 1000 == 0:
+                print(f"[Audio] 📊 1000프레임 처리 완료: {frame_counter['count']}개, 손실률: {(frame_counter['dropped_frames'] / frame_counter['count']) * 100:.2f}%")
             
         except Exception as e:
-            print(f"[DEBUG-AUDIO] ❌ 오디오 프레임 처리 실패: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[Audio] ❌ 오디오 프레임 처리 실패: {e}")
             
         return frame
     return audio_frame_callback
