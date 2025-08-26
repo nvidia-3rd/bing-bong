@@ -176,5 +176,9 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/python
 
 .venv
-
 poetry.lock
+.env
+*.wav
+__pycache__/
+__init__
+vector_store_faiss/

@@ -1,0 +1,44 @@
+/* styles.css */
+:root { --fg:#111; --muted:#6b7280; }
+
+.bb-topbar {
+  display:flex; justify-content:space-between; align-items:center;
+  padding: 10px 6px 0 6px;
+}
+
+.bb-brand { font-weight:700; color:var(--fg); }
+.bb-menu a { color:#4b5563; text-decoration:none; }
+.bb-menu a:hover { text-decoration:underline; }
+
+.bb-title {
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 12px 0 8px 0;
+  color: var(--fg);
+}
+
+.bb-subtitle {
+  font-size: 18px;
+  color: var(--fg);
+  margin-bottom: 4px;
+}
+
+.bb-body {
+  font-size: 16px;
+  color: var(--fg);
+  margin-bottom: 24px;
+}
+
+.bb-footer {
+  margin-top: 64px; padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+  display:flex; justify-content:space-between; align-items:flex-end;
+  color: var(--muted);
+}
+
+.stApp {
+  background-color: #FFFFFF;
+}
+
+.bb-footmark { text-align:right; }
