@@ -45,7 +45,6 @@
 ## 💻 팀 구성 및 역할 👥
 | 지욱 | 준서 | 채연 | 정상 | 민성 | 진수 |
 |:---:|:---:|:---:|:---:|:---:|:---:|
-|[<img src="https://avatars.githubusercontent.com/u/1?v=4" width=110>](#)|[<img src="https://avatars.githubusercontent.com/u/2?v=4" width=110>](#)|[<img src="https://avatars.githubusercontent.com/u/3?v=4" width=110>](#)|[<img src="https://avatars.githubusercontent.com/u/4?v=4" width=110>](#)|[<img src="https://avatars.githubusercontent.com/u/5?v=4" width=110>](#)|[<img src="https://avatars.githubusercontent.com/u/6?v=4" width=110>](#)|
 |Vision · STT (DeepFace, WebRTC+Whisper) 🎥🎙️|감정 프롬프팅 설계(7감정) 🧩|CoE 공감 체인·여섯 모자 프롬프트·UX 🧠🎩|대화 맥락·요약·Vector DB 🧵|TTS(감정 반영 음성) 🔊|Streamlit/WebRTC Client · FastAPI 🧰|
 
 <br><br><br>
