@@ -51,7 +51,7 @@
 <br><br><br>
 
 ## 서비스 아키텍쳐 🏗️
-<img width="100%" src="YOUR_ARCHITECTURE_IMAGE_URL"/>
+<img width="100%" src="./bing_bong/client/assets/system-arch.png"/>
 
 - **Client (Streamlit + WebRTC)**: 카메라/마이크 입력 스트리밍, 실시간 UI 🎛️
 - **FastAPI Adapter**: STT/TTS/LLM/Vision 외부 API 연계, 백엔드 Orchestration 🔌

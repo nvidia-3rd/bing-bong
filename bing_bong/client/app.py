@@ -1,7 +1,7 @@
 # app.py
 import streamlit as st
 from pathlib import Path
-from router import route, navigate
+
 
 st.set_page_config(
     page_title="BingBong",
@@ -54,9 +54,23 @@ with right:
 # 하단 푸터
 st.markdown(
     """
+    <style>
+    .bb-footer {
+        display: flex;
+        justify-content: flex-start;  /* 왼쪽 정렬 */
+        gap: 24px;                    /* 아이템 간 간격 */
+        align-items: center;          /* 세로 정렬 */
+        padding: 12px 0;
+        color: #111;
+    }
+    .bb-footmark {
+        font-weight: bold;
+    }
+    </style>
+
     <div class="bb-footer">
-      <div>2025</div>
-      <div>Team BingBong<br/>표정 인식 공감 봇</div>
+      <div>2025</div> <br/>
+      <div>Team BingBong<br/>표정 인식 공감 봇</div> <br/>
       <div class="bb-footmark">BingBong</div>
     </div>
     """,
