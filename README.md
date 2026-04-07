@@ -113,19 +113,6 @@
   | `start_ts` / `end_ts` | 발화 시간 범위 ⏰ |
   | `audio_ref` | 원본 오디오 참조(옵션) 🎧 |
 
-### 3) 대화/기억 스토어 💭🗂️
-- **RDB**: 사용자/세션/감정 이벤트/발화 로그
-- **Vector DB(FAISS)**: 발화 임베딩, 유사 문맥 검색
-- **핵심 필드**
-  | Table | Key Fields |
-  |---|---|
-  | `users` | `user_id`, profile/meta 👤 |
-  | `sessions` | `session_id`, `user_id`, started_at 🧭 |
-  | `utterances` | `utterance_id`, `user_id`, text, ts 💬 |
-  | `emotions` | `event_id`, `user_id`, emotion_before/after, delta_flag 🧾 |
-  | `memories` | long-term notes, tags, last_accessed 📚 |
-
-<br><br>
 
 ## 프로젝트 목표 🎯
 ### 1) 개발 목표
